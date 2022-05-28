@@ -1,0 +1,5 @@
+github.com/go-logr/logr v1.1.0/go.mod h1:jdQByPbusPIv2/zmleS9BjJVeZ6kBagPoEUsqbVz/1A=
+github.com/go-logr/logr v1.2.3 h1:2DntVwHkVopvECVRSlL5PSo9eG+cAkDCuckLubN+rq0=
+github.com/go-logr/logr v1.2.3/go.mod h1:jdQByPbusPIv2/zmleS9BjJVeZ6kBagPoEUsqbVz/1A=
+github.com/iand/logfmtr v0.2.1 h1:y677w6gmOdGXaPbIGjQhGZdmezpCo0AyxXC74scyDk0=
+github.com/iand/logfmtr v0.2.1/go.mod h1:J1K526bF1o/E0Xq01J0vk7pLEfHkgGs8vmdbxH4wqwU=
