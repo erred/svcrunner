@@ -1,6 +1,8 @@
 steps:
   - name: 'us-central1-docker.pkg.dev/com-seankhliao/build/gotip:latest'
     entrypoint: /bin/sh
+    env:
+      - CGO_ENABLED=0
     args:
       - -c
       - |
