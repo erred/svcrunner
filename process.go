@@ -10,6 +10,8 @@ import (
 
 	"github.com/go-logr/logr"
 	"go.seankhliao.com/svcrunner/envflag"
+	"golang.org/x/net/http2"
+	"golang.org/x/net/http2/h2c"
 	"google.golang.org/grpc"
 )
 
@@ -27,6 +29,9 @@ type (
 )
 
 func NewHTTP(s *http.Server, reg RegFunc, init RunFunc) Process {
+	// configure for h2c
+	s.Handler = h2c.NewHandler(s.Handler, &http2.Server{})
+
 	var host, port string
 	return Process{
 		Register: func(c *envflag.Config) {
