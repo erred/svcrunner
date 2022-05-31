@@ -1,0 +1,9 @@
+steps:
+  - name: 'us-central1-docker.pkg.dev/com-seankhliao/build/gotip:latest'
+    entrypoint: /bin/sh
+    args:
+      - -c
+      - |
+        go test -vet=all ./... && \
+        staticcheck ./... && \
+        go build ./...
