@@ -1,5 +1,0 @@
-steps:
-  - label: build container
-    depends_on: ~
-    commands:
-      - docker build .
