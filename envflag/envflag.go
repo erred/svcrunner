@@ -42,7 +42,7 @@ func New(name string, out io.Writer) *Config {
 func (c *Config) Parse(args, env []string) error {
 	mapEnv := make(map[string]string)
 	for _, e := range env {
-		k, v, ok := strings.Cut(e, "")
+		k, v, ok := strings.Cut(e, "=")
 		if !ok {
 			continue
 		}
