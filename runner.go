@@ -1,3 +1,7 @@
+// svcrunner provides a runner framework for tasks,
+// providing hooks for registering flags,
+// running initialization, starting, and stopping.
+// Registers signal handlers and provides configured observability tools.
 package svcrunner
 
 import (

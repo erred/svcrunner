@@ -1,3 +1,7 @@
+// envflag wraps flag.FlagSet,
+// allowing values to be set from the environment,
+// translating keys from
+// `screaming.snake-case` to `SCREAMING_SNAKE_CASE`
 package envflag
 
 import (
@@ -51,7 +55,9 @@ func (c *Config) Parse(args, env []string) error {
 
 	var errs []setEnvErr
 	c.VisitAll(func(f *flag.Flag) {
-		k := strings.ReplaceAll(strings.ToUpper(f.Name), ".", "_")
+		k := strings.ToUpper(f.Name)
+		k = strings.ReplaceAll(k, ".", "_")
+		k = strings.ReplaceAll(k, "-", "_")
 		if v, ok := mapEnv[k]; ok {
 			err := f.Value.Set(v)
 			if err != nil {
