@@ -33,10 +33,13 @@ func NewHTTP(s *http.Server, reg RegFunc, init RunFunc) Process {
 	s.Handler = h2c.NewHandler(s.Handler, &http2.Server{})
 
 	var host, port string
+	var tlsServerCrt, tlsServerKey string
 	return Process{
 		Register: func(c *envflag.Config) {
 			c.StringVar(&host, "host", "", "host to bind bind to")
 			c.StringVar(&port, "port", "8080", "port to listen on")
+			c.StringVar(&tlsServerCrt, "tls.server.crt-path", "", "path to tls crt")
+			c.StringVar(&tlsServerKey, "tls.server.key-path", "", "path to tls key")
 			if reg != nil {
 				reg(c)
 			}
@@ -47,8 +50,14 @@ func NewHTTP(s *http.Server, reg RegFunc, init RunFunc) Process {
 				s.ErrorLog = log.New(&logWriter{t.Log.WithName("http")}, "", 0)
 			}
 			s.Addr = net.JoinHostPort(host, port)
-			t.Log.Info("starting http server", "addr", s.Addr)
-			err := s.ListenAndServe()
+			var err error
+			if tlsServerKey != "" && tlsServerCrt != "" {
+				t.Log.Info("starting https server", "addr", s.Addr)
+				err = s.ListenAndServeTLS(tlsServerCrt, tlsServerKey)
+			} else {
+				t.Log.Info("starting http server", "addr", s.Addr)
+				err = s.ListenAndServe()
+			}
 			if err != nil && !errors.Is(err, http.ErrServerClosed) {
 				return fmt.Errorf("svcrunner http serve: %w", err)
 			}
