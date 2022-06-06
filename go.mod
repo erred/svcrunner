@@ -4,7 +4,6 @@ go 1.19
 
 require (
 	github.com/go-logr/logr v1.2.3
-	github.com/iand/logfmtr v0.2.1
 	golang.org/x/net v0.0.0-20220531201128-c960675eff93
 	google.golang.org/grpc v1.47.0
 )
