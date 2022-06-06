@@ -17,7 +17,7 @@ type Tools struct {
 }
 
 func (t *Tools) register(c *envflag.Config) {
-	c.StringVar(&t.logfmt, "log.format", "json", "log output format: text|json")
+	c.StringVar(&t.logfmt, "log.format", "json", "log output format: text|json|json+gcp")
 	c.IntVar(&t.verbosity, "log.verbosity", 0, "log verbosity (error/info/debug/trace): -1 - 2")
 }
 
