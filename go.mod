@@ -4,7 +4,8 @@ go 1.19
 
 require (
 	github.com/go-logr/logr v1.2.3
-	golang.org/x/net v0.0.0-20220531201128-c960675eff93
+	go.seankhliao.com/gchat v0.0.0-20220606145341-27700a74582c
+	golang.org/x/net v0.0.0-20220607020251-c690dde0001d
 	google.golang.org/grpc v1.47.0
 )
 
