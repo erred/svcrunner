@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -75,6 +76,9 @@ func (t *Tools) init(out io.Writer) error {
 }
 
 func gchatReport(client *gchat.WebhookClient, obj string) {
+	if !strings.Contains(obj, "ERROR") {
+		return
+	}
 	client.Post(context.Background(), gchat.WebhookPayload{
 		Text: obj,
 	})
