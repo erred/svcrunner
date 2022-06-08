@@ -98,10 +98,10 @@ func run(o Options, procs []Process) error {
 	log.V(1).Info("initializing processes")
 	for _, proc := range procs {
 		if proc.Init == nil {
-			log.V(2).Info("skipping Init", "process", proc.Name)
+			log.V(1).Info("skipping Init", "process", proc.Name)
 			continue
 		}
-		log.V(2).Info("running Init", "process", proc.Name)
+		log.V(1).Info("running Init", "process", proc.Name)
 		err := proc.Init(ctx, t)
 		if err != nil {
 			return fmt.Errorf("svcrunner init process %v: %w", proc.Name, err)
@@ -115,17 +115,17 @@ func run(o Options, procs []Process) error {
 	log.V(1).Info("starting processes")
 	for _, proc := range procs {
 		if proc.Start == nil {
-			log.V(2).Info("skipping Start", "process", proc.Name)
+			log.V(1).Info("skipping Start", "process", proc.Name)
 			continue
 		}
-		log.V(2).Info("running Start", "process", proc.Name)
+		log.V(1).Info("running Start", "process", proc.Name)
 		ctr++
 		go runFunc(ctx, t, proc.Start, proc.Name, "run", errc)
 	}
 
 	close(startc) // startup completed
 
-	log.V(2).Info("waiting for interrupt")
+	log.V(1).Info("waiting for interrupt")
 	select {
 	case sig := <-sigc: // signal during run
 		log.V(1).Info("received shutdown signal", "signal", sig)
@@ -147,18 +147,18 @@ func run(o Options, procs []Process) error {
 
 	go cancelOnSignal(ctx, sigc, stopc, cancel)
 
-	log.V(2).Info("shutting down processes")
+	log.V(1).Info("shutting down processes")
 	for _, proc := range procs {
 		if proc.Stop == nil {
-			log.V(2).Info("skipping Stop", "process", proc.Name)
+			log.V(1).Info("skipping Stop", "process", proc.Name)
 			continue
 		}
-		log.V(2).Info("running Stop", "process", proc.Name)
+		log.V(1).Info("running Stop", "process", proc.Name)
 		ctr++
 		go runFunc(ctx, t, proc.Stop, proc.Name, "stop", errc)
 	}
 
-	log.V(2).Info("waiting for procsses to exit")
+	log.V(1).Info("waiting for procsses to exit")
 countExit:
 	for {
 		select {

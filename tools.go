@@ -64,7 +64,9 @@ func (t *Tools) init(out io.Writer) error {
 			Verbosity: t.verbosity,
 			RenderBuiltinsHook: func(kvList []any) []any {
 				out := kvListToGCPLog(kvList)
-				gchatReport(t.gchat, out)
+				if t.gchat != nil {
+					gchatReport(t.gchat, out)
+				}
 				return out
 			},
 		})
