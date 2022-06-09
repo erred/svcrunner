@@ -20,6 +20,7 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.10.0"
+	"go.opentelemetry.io/otel/trace"
 	"go.seankhliao.com/gchat"
 	"go.seankhliao.com/svcrunner/envflag"
 )
@@ -73,6 +74,38 @@ func kvListToGCPLog(kvList []any) []any {
 	for i := 0; i < len(kvList); i += 2 {
 		// note: RenderBuiltinsHook only works for logr/funcr builtin key/values
 		switch kvList[i].(string) {
+		case "ctx":
+			ctx, ok := kvList[i+1].(context.Context)
+			if !ok {
+				out = append(out, kvList[i], kvList[i+1])
+				continue
+			}
+			spanCtx := trace.SpanContextFromContext(ctx)
+			out = append(out,
+				"logging.googleapis.com/trace", spanCtx.TraceID().String(),
+				"logging.googleapis.com/spanId", spanCtx.SpanID().String(),
+				"logging.googleapis.com/trace_sampled", spanCtx.IsSampled(),
+			)
+		case "http_request":
+			req, ok := kvList[i+1].(*http.Request)
+			if !ok {
+				out = append(out, kvList[i], kvList[i+1])
+				continue
+			}
+			req.URL.Scheme = "http"
+			if req.TLS != nil {
+				req.URL.Scheme = "https"
+			}
+			req.URL.Host = req.Host
+
+			out = append(out, "httpRequest", map[string]any{
+				"requestMethod": req.Method,
+				"requestUrl":    req.URL.String(),
+				"userAgent":     req.UserAgent(),
+				"remoteIp":      req.RemoteAddr,
+				"referer":       req.Referer(),
+				"protocol":      req.Proto,
+			})
 		case "level":
 			switch kvList[i+1].(int) {
 			case 0:
