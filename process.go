@@ -9,6 +9,7 @@ import (
 	"net/http"
 
 	"github.com/go-logr/logr"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.seankhliao.com/svcrunner/envflag"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/h2c"
@@ -50,6 +51,7 @@ func NewHTTP(s *http.Server, reg RegFunc, init RunFunc) Process {
 				s.ErrorLog = log.New(&logWriter{t.Log.WithName("http")}, "", 0)
 			}
 			s.Addr = net.JoinHostPort(host, port)
+			s.Handler = otelhttp.NewHandler(s.Handler, "svcrunner/http")
 			var err error
 			if tlsServerKey != "" && tlsServerCrt != "" {
 				t.Log.Info("starting https server", "addr", s.Addr)

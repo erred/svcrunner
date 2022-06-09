@@ -5,73 +5,56 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"runtime/debug"
 	"strings"
 	"time"
 
+	cloudtrace "github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/trace"
+	gcppropagator "github.com/GoogleCloudPlatform/opentelemetry-operations-go/propagator"
 	"github.com/go-logr/logr"
 	"github.com/go-logr/logr/funcr"
+	"go.opentelemetry.io/contrib/detectors/gcp"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/sdk/resource"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	semconv "go.opentelemetry.io/otel/semconv/v1.10.0"
 	"go.seankhliao.com/gchat"
 	"go.seankhliao.com/svcrunner/envflag"
 )
 
 type Tools struct {
-	// logging to stdout
-	logfmt    string
-	verbosity int
-	Log       logr.Logger
+	Log logr.Logger
 
-	// also log errors to workspace
-	gchatEndpoint string
-	gchat         *gchat.WebhookClient
+	// logging
+	logfmt        string
+	verbosity     int
+	gchatEndpoint string // also log errors to workspace
+	// tracing
+	traceExport string
 }
 
 func (t *Tools) register(c *envflag.Config) {
 	c.StringVar(&t.logfmt, "log.format", "json", "log output format: text|json|json+gcp")
 	c.IntVar(&t.verbosity, "log.verbosity", 0, "log verbosity [error|notice|info|debug]: -1|0|1|2")
 	c.StringVar(&t.gchatEndpoint, "log.errors-gchat", "", "log errors to google chat (only for json+gcp): $webhook_url")
+	c.StringVar(&t.traceExport, "trace.export", "cloudtrace", "enable tracing")
 }
 
 func (t *Tools) init(out io.Writer) error {
-	if t.gchatEndpoint != "" {
-		t.gchat = &gchat.WebhookClient{
-			Client:   http.DefaultClient,
-			Endpoint: t.gchatEndpoint,
-		}
+	// tracing
+	err := traceExporter(t.traceExport)
+	if err != nil {
+		return fmt.Errorf("setup trace exporter: %w", err)
 	}
 
-	switch t.logfmt {
-	case "text":
-		t.Log = funcr.New(func(prefix, args string) {
-			fmt.Fprintln(out, prefix, args)
-		}, funcr.Options{
-			LogTimestamp:    true,
-			TimestampFormat: time.RFC3339,
-			Verbosity:       t.verbosity,
-		})
-
-	case "json":
-		t.Log = funcr.NewJSON(func(obj string) {
-			fmt.Fprintln(out, obj)
-		}, funcr.Options{
-			Verbosity:       t.verbosity,
-			LogTimestamp:    true,
-			TimestampFormat: time.RFC3339,
-		})
-	case "json+gcp":
-		t.Log = funcr.NewJSON(func(obj string) {
-			fmt.Fprintln(out, obj)
-			if t.gchat != nil {
-				gchatReport(t.gchat, obj)
-			}
-		}, funcr.Options{
-			Verbosity: t.verbosity,
-			RenderBuiltinsHook: func(kvList []any) []any {
-				return kvListToGCPLog(kvList)
-			},
-		})
-	default:
-		return fmt.Errorf("unknown log format: %v", t.logfmt)
+	// logging
+	t.Log, err = logExporter(t.logfmt, t.verbosity, out, t.gchatEndpoint)
+	if err != nil {
+		return fmt.Errorf("setup log exporter: %w", err)
 	}
+
 	return nil
 }
 
@@ -108,4 +91,103 @@ func kvListToGCPLog(kvList []any) []any {
 		}
 	}
 	return out
+}
+
+func logExporter(format string, verbosity int, out io.Writer, gchatEndpoint string) (logr.Logger, error) {
+	var chat *gchat.WebhookClient
+	if gchatEndpoint != "" {
+		chat = &gchat.WebhookClient{
+			Client: &http.Client{
+				Transport: otelhttp.NewTransport(nil),
+			},
+			Endpoint: gchatEndpoint,
+		}
+	}
+
+	var log logr.Logger
+	switch format {
+	case "text":
+		log = funcr.New(func(prefix, args string) {
+			fmt.Fprintln(out, prefix, args)
+		}, funcr.Options{
+			LogTimestamp:    true,
+			TimestampFormat: time.RFC3339,
+			Verbosity:       verbosity,
+		})
+
+	case "json":
+		log = funcr.NewJSON(func(obj string) {
+			fmt.Fprintln(out, obj)
+		}, funcr.Options{
+			Verbosity:       verbosity,
+			LogTimestamp:    true,
+			TimestampFormat: time.RFC3339,
+		})
+	case "json+gcp":
+		log = funcr.NewJSON(func(obj string) {
+			fmt.Fprintln(out, obj)
+			if chat != nil {
+				gchatReport(chat, obj)
+			}
+		}, funcr.Options{
+			Verbosity: verbosity,
+			RenderBuiltinsHook: func(kvList []any) []any {
+				return kvListToGCPLog(kvList)
+			},
+		})
+	default:
+		return logr.Logger{}, fmt.Errorf("unknown log format: %v", format)
+	}
+	return log, nil
+}
+
+func traceExporter(exporter string) error {
+	var tpOpts []sdktrace.TracerProviderOption
+	switch exporter {
+	case "cloudtrace":
+		exporter, err := cloudtrace.New()
+		if err != nil {
+			return fmt.Errorf("create google cloud trace exporter: %w", err)
+		}
+
+		tpOpts = append(tpOpts, sdktrace.WithSyncer(exporter))
+	default:
+		return nil
+	}
+
+	bi, ok := debug.ReadBuildInfo()
+	if !ok {
+		return fmt.Errorf("failed to read buildinfo")
+	}
+	ctx := context.TODO()
+	res, err := resource.New(ctx,
+		resource.WithFromEnv(),
+		resource.WithTelemetrySDK(),
+		resource.WithDetectors(gcp.NewCloudRun()),
+		resource.WithAttributes(
+			semconv.ServiceNameKey.String(bi.Path),
+		),
+	)
+	if err != nil {
+		return fmt.Errorf("setup otel resource detectors: %w", err)
+	}
+
+	tpOpts = append(tpOpts, sdktrace.WithResource(res))
+	tpOpts = append(tpOpts, sdktrace.WithSampler(sdktrace.AlwaysSample()))
+
+	tp := sdktrace.NewTracerProvider(tpOpts...)
+	otel.SetTracerProvider(tp)
+	// TODO: tp.Shutdown
+
+	otel.SetTextMapPropagator(
+		propagation.NewCompositeTextMapPropagator(
+			// Putting the CloudTraceOneWayPropagator first means the TraceContext propagator
+			// takes precedence if both the traceparent and the XCTC headers exist.
+			gcppropagator.CloudTraceOneWayPropagator{},
+			propagation.TraceContext{},
+			propagation.Baggage{},
+		),
+	)
+
+	return nil
 }
