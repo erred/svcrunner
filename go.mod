@@ -4,7 +4,6 @@ go 1.19
 
 require (
 	cloud.google.com/go/compute v1.6.1
-	github.com/GoogleCloudPlatform/opentelemetry-operations-go v0.32.1
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/trace v1.8.1
 	github.com/go-logr/logr v1.2.3
 	go.opentelemetry.io/contrib/detectors/gcp v1.7.0

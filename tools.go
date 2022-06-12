@@ -11,7 +11,6 @@ import (
 
 	"cloud.google.com/go/compute/metadata"
 	cloudtrace "github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/trace"
-	gcppropagator "github.com/GoogleCloudPlatform/opentelemetry-operations-go/propagator"
 	"github.com/go-logr/logr"
 	"github.com/go-logr/logr/funcr"
 	"go.opentelemetry.io/contrib/detectors/gcp"
@@ -237,7 +236,7 @@ func traceExporter(exporter string) error {
 		propagation.NewCompositeTextMapPropagator(
 			// Putting the CloudTraceOneWayPropagator first means the TraceContext propagator
 			// takes precedence if both the traceparent and the XCTC headers exist.
-			gcppropagator.CloudTraceOneWayPropagator{},
+			// gcppropagator.CloudTraceOneWayPropagator{},
 			propagation.TraceContext{},
 			propagation.Baggage{},
 		),

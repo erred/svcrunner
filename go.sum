@@ -59,8 +59,6 @@ cloud.google.com/go/trace v1.2.0/go.mod h1:Wc8y/uYyOhPy12KEnXG9XGrvfMz5F5SrYecQl
 dmitri.shuralyov.com/gpu/mtl v0.0.0-20190408044501-666a987793e9/go.mod h1:H6x//7gZCb22OMCxBHrMx7a5I7Hp++hsVxbQ4BYO7hU=
 github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03qcyfWMU=
 github.com/BurntSushi/xgb v0.0.0-20160522181843-27f122750802/go.mod h1:IVnqGOEym/WlBOVXweHU+Q+/VP0lqqI8lqeDx9IjBqo=
-github.com/GoogleCloudPlatform/opentelemetry-operations-go v0.32.1 h1:4nBGFTIBNXqUep3SxJiPn3Wnn95BYVpS2wnggeofsV0=
-github.com/GoogleCloudPlatform/opentelemetry-operations-go v0.32.1/go.mod h1:M2LNJDLE5udg/GF+81jWPJ5L2qkzo5KO/IWahxofRWU=
 github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/trace v1.8.1 h1:Tn/3pMqRSsI09jFVdGEuMqLIBNOmRHVqKp9DSQg4HPM=
 github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/trace v1.8.1/go.mod h1:KddM1vG3MS+CRfmoFBqeUIICfd9nS8pLHKtwJ/kt0QQ=
 github.com/GoogleCloudPlatform/opentelemetry-operations-go/internal/resourcemapping v0.32.1 h1:SixyMKTOWhEWISdA7PB7vOxkvOP8BIgW5uzbyIf0kXM=
