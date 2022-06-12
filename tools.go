@@ -216,7 +216,6 @@ func traceExporter(exporter string) error {
 	}
 
 	tpOpts = append(tpOpts, sdktrace.WithResource(res))
-	tpOpts = append(tpOpts, sdktrace.WithSampler(sdktrace.AlwaysSample()))
 
 	tp := sdktrace.NewTracerProvider(tpOpts...)
 	otel.SetTracerProvider(tp)
