@@ -9,7 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"cloud.google.com/go/compute/metadata"
 	cloudtrace "github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/trace"
 	"github.com/go-logr/logr"
 	"github.com/go-logr/logr/funcr"
@@ -69,7 +68,7 @@ func gchatReport(client *gchat.WebhookClient, obj string) {
 	})
 }
 
-func kvListToGCPLog(kvList []any, addSeverity bool, projectID string) []any {
+func kvListToGCPLog(kvList []any, addSeverity bool) []any {
 	out := make([]any, 0, len(kvList)+2)
 	if addSeverity {
 		out = append(out, "severity", "ERROR")
@@ -85,7 +84,7 @@ func kvListToGCPLog(kvList []any, addSeverity bool, projectID string) []any {
 			}
 			spanCtx := trace.SpanContextFromContext(ctx)
 			out = append(out,
-				"logging.googleapis.com/trace", "projects/"+projectID+"/traces/"+spanCtx.TraceID().String(),
+				"logging.googleapis.com/trace", spanCtx.TraceID().String(),
 				"logging.googleapis.com/spanId", spanCtx.SpanID().String(),
 				"logging.googleapis.com/trace_sampled", spanCtx.IsSampled(),
 			)
@@ -162,10 +161,6 @@ func logExporter(format string, verbosity int, out io.Writer, gchatEndpoint stri
 			TimestampFormat: time.RFC3339,
 		})
 	case "json+gcp":
-		projectID, err := metadata.ProjectID()
-		if err != nil {
-			return log, fmt.Errorf("get google project id from metadata: %w", err)
-		}
 		log = funcr.NewJSON(func(obj string) {
 			fmt.Fprintln(out, obj)
 			if chat != nil {
@@ -174,13 +169,13 @@ func logExporter(format string, verbosity int, out io.Writer, gchatEndpoint stri
 		}, funcr.Options{
 			Verbosity: verbosity,
 			RenderBuiltinsHook: func(kvList []interface{}) []interface{} {
-				return kvListToGCPLog(kvList, true, projectID)
+				return kvListToGCPLog(kvList, true)
 			},
 			RenderValuesHook: func(kvList []interface{}) []interface{} {
-				return kvListToGCPLog(kvList, false, projectID)
+				return kvListToGCPLog(kvList, false)
 			},
 			RenderArgsHook: func(kvList []interface{}) []interface{} {
-				return kvListToGCPLog(kvList, false, projectID)
+				return kvListToGCPLog(kvList, false)
 			},
 		})
 	default:
@@ -234,9 +229,6 @@ func traceExporter(exporter string) error {
 
 	otel.SetTextMapPropagator(
 		propagation.NewCompositeTextMapPropagator(
-			// Putting the CloudTraceOneWayPropagator first means the TraceContext propagator
-			// takes precedence if both the traceparent and the XCTC headers exist.
-			// gcppropagator.CloudTraceOneWayPropagator{},
 			propagation.TraceContext{},
 			propagation.Baggage{},
 		),
