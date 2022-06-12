@@ -163,10 +163,10 @@ func logExporter(format string, verbosity int, out io.Writer, gchatEndpoint stri
 				gchatReport(chat, obj)
 			}
 		}, funcr.Options{
-			Verbosity: verbosity,
-			RenderBuiltinsHook: func(kvList []any) []any {
-				return kvListToGCPLog(kvList)
-			},
+			Verbosity:          verbosity,
+			RenderBuiltinsHook: kvListToGCPLog,
+			RenderValuesHook:   kvListToGCPLog,
+			RenderArgsHook:     kvListToGCPLog,
 		})
 	default:
 		return logr.Logger{}, fmt.Errorf("unknown log format: %v", format)
