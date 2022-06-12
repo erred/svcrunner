@@ -68,9 +68,11 @@ func gchatReport(client *gchat.WebhookClient, obj string) {
 	})
 }
 
-func kvListToGCPLog(kvList []any) []any {
+func kvListToGCPLog(kvList []any, addSeverity bool) []any {
 	out := make([]any, 0, len(kvList)+2)
-	out = append(out, "severity", "ERROR")
+	if addSeverity {
+		out = append(out, "severity", "ERROR")
+	}
 	for i := 0; i < len(kvList); i += 2 {
 		// note: RenderBuiltinsHook only works for logr/funcr builtin key/values
 		switch kvList[i].(string) {
@@ -107,15 +109,17 @@ func kvListToGCPLog(kvList []any) []any {
 				"protocol":      req.Proto,
 			})
 		case "level":
-			switch kvList[i+1].(int) {
-			case 0:
-				out[1] = "NOTICE"
-			case 1:
-				out[1] = "INFO"
-			case 2:
-				out[1] = "DEBUG"
-			default:
-				out[1] = "DEFAULT"
+			if addSeverity {
+				switch kvList[i+1].(int) {
+				case 0:
+					out[1] = "NOTICE"
+				case 1:
+					out[1] = "INFO"
+				case 2:
+					out[1] = "DEBUG"
+				default:
+					out[1] = "DEFAULT"
+				}
 			}
 		case "msg":
 			out = append(out, "message", kvList[i+1])
@@ -163,10 +167,16 @@ func logExporter(format string, verbosity int, out io.Writer, gchatEndpoint stri
 				gchatReport(chat, obj)
 			}
 		}, funcr.Options{
-			Verbosity:          verbosity,
-			RenderBuiltinsHook: kvListToGCPLog,
-			RenderValuesHook:   kvListToGCPLog,
-			RenderArgsHook:     kvListToGCPLog,
+			Verbosity: verbosity,
+			RenderBuiltinsHook: func(kvList []interface{}) []interface{} {
+				return kvListToGCPLog(kvList, true)
+			},
+			RenderValuesHook: func(kvList []interface{}) []interface{} {
+				return kvListToGCPLog(kvList, false)
+			},
+			RenderArgsHook: func(kvList []interface{}) []interface{} {
+				return kvListToGCPLog(kvList, false)
+			},
 		})
 	default:
 		return logr.Logger{}, fmt.Errorf("unknown log format: %v", format)
