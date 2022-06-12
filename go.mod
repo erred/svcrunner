@@ -3,12 +3,14 @@ module go.seankhliao.com/svcrunner
 go 1.19
 
 require (
+	cloud.google.com/go/compute v1.6.1
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go v0.32.1
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/trace v1.8.1
 	github.com/go-logr/logr v1.2.3
 	go.opentelemetry.io/contrib/detectors/gcp v1.7.0
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.32.0
 	go.opentelemetry.io/otel v1.7.0
+	go.opentelemetry.io/otel/exporters/stdout/stdouttrace v1.7.0
 	go.opentelemetry.io/otel/sdk v1.7.0
 	go.opentelemetry.io/otel/trace v1.7.0
 	go.seankhliao.com/gchat v0.0.0-20220612154931-8f1077ccd269
@@ -18,7 +20,6 @@ require (
 
 require (
 	cloud.google.com/go v0.102.0 // indirect
-	cloud.google.com/go/compute v1.6.1 // indirect
 	cloud.google.com/go/trace v1.2.0 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/internal/resourcemapping v0.32.1 // indirect
 	github.com/felixge/httpsnoop v1.0.3 // indirect

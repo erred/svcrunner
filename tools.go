@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"cloud.google.com/go/compute/metadata"
 	cloudtrace "github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/trace"
 	gcppropagator "github.com/GoogleCloudPlatform/opentelemetry-operations-go/propagator"
 	"github.com/go-logr/logr"
@@ -16,6 +17,7 @@ import (
 	"go.opentelemetry.io/contrib/detectors/gcp"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/exporters/stdout/stdouttrace"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
@@ -68,7 +70,7 @@ func gchatReport(client *gchat.WebhookClient, obj string) {
 	})
 }
 
-func kvListToGCPLog(kvList []any, addSeverity bool) []any {
+func kvListToGCPLog(kvList []any, addSeverity bool, projectID string) []any {
 	out := make([]any, 0, len(kvList)+2)
 	if addSeverity {
 		out = append(out, "severity", "ERROR")
@@ -84,7 +86,7 @@ func kvListToGCPLog(kvList []any, addSeverity bool) []any {
 			}
 			spanCtx := trace.SpanContextFromContext(ctx)
 			out = append(out,
-				"logging.googleapis.com/trace", spanCtx.TraceID().String(),
+				"logging.googleapis.com/trace", "projects/"+projectID+"/traces/"+spanCtx.TraceID().String(),
 				"logging.googleapis.com/spanId", spanCtx.SpanID().String(),
 				"logging.googleapis.com/trace_sampled", spanCtx.IsSampled(),
 			)
@@ -161,6 +163,10 @@ func logExporter(format string, verbosity int, out io.Writer, gchatEndpoint stri
 			TimestampFormat: time.RFC3339,
 		})
 	case "json+gcp":
+		projectID, err := metadata.ProjectID()
+		if err != nil {
+			return log, fmt.Errorf("get google project id from metadata: %w", err)
+		}
 		log = funcr.NewJSON(func(obj string) {
 			fmt.Fprintln(out, obj)
 			if chat != nil {
@@ -169,13 +175,13 @@ func logExporter(format string, verbosity int, out io.Writer, gchatEndpoint stri
 		}, funcr.Options{
 			Verbosity: verbosity,
 			RenderBuiltinsHook: func(kvList []interface{}) []interface{} {
-				return kvListToGCPLog(kvList, true)
+				return kvListToGCPLog(kvList, true, projectID)
 			},
 			RenderValuesHook: func(kvList []interface{}) []interface{} {
-				return kvListToGCPLog(kvList, false)
+				return kvListToGCPLog(kvList, false, projectID)
 			},
 			RenderArgsHook: func(kvList []interface{}) []interface{} {
-				return kvListToGCPLog(kvList, false)
+				return kvListToGCPLog(kvList, false, projectID)
 			},
 		})
 	default:
@@ -193,6 +199,12 @@ func traceExporter(exporter string) error {
 			return fmt.Errorf("create google cloud trace exporter: %w", err)
 		}
 
+		tpOpts = append(tpOpts, sdktrace.WithSyncer(exporter))
+	case "stdout":
+		exporter, err := stdouttrace.New()
+		if err != nil {
+			return fmt.Errorf("create stdout trace exporter: %w", err)
+		}
 		tpOpts = append(tpOpts, sdktrace.WithSyncer(exporter))
 	default:
 		return nil
