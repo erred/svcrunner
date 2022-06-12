@@ -48,9 +48,8 @@ func NewHTTP(s *http.Server, reg RegFunc, init RunFunc) Process {
 				s.ErrorLog = log.New(&logWriter{t.Log.WithName("http")}, "", 0)
 			}
 			s.Addr = net.JoinHostPort(host, port)
-			// configure for h2c
-			s.Handler = otelhttp.NewHandler(s.Handler, "svcrunner/http")
-			s.Handler = h2c.NewHandler(s.Handler, &http2.Server{})
+			s.Handler = otelhttp.NewHandler(s.Handler, "svcrunner/http") // second handler
+			s.Handler = h2c.NewHandler(s.Handler, &http2.Server{})       // first handler
 			var err error
 			if tlsServerKey != "" && tlsServerCrt != "" {
 				t.Log.Info("starting https server", "addr", s.Addr)
