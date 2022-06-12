@@ -11,7 +11,7 @@ require (
 	go.opentelemetry.io/otel v1.7.0
 	go.opentelemetry.io/otel/sdk v1.7.0
 	go.opentelemetry.io/otel/trace v1.7.0
-	go.seankhliao.com/gchat v0.0.0-20220606145341-27700a74582c
+	go.seankhliao.com/gchat v0.0.0-20220612154931-8f1077ccd269
 	golang.org/x/net v0.0.0-20220607020251-c690dde0001d
 	google.golang.org/grpc v1.47.0
 )
