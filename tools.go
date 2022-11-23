@@ -40,27 +40,40 @@ type Tools struct {
 	verbosity     int
 	gchatEndpoint string // also log errors to workspace
 	// tracing
-	traceExport string
+	traceExport  string
+	metricExport string
 }
 
 func (t *Tools) register(c *envflag.Config) {
 	c.StringVar(&t.logfmt, "log.format", "json", "log output format: text|json|json+gcp")
 	c.IntVar(&t.verbosity, "log.verbosity", 0, "log verbosity [error|notice|info|debug]: -1|0|1|2")
 	c.StringVar(&t.gchatEndpoint, "log.errors-gchat", "", "log errors to google chat (only for json+gcp): $webhook_url")
-	c.StringVar(&t.traceExport, "trace.export", "cloudtrace", "enable tracing")
+	c.StringVar(&t.traceExport, "trace.export", "otlp", "enable tracing")
+	c.StringVar(&t.metricExport, "metric.export", "otlp", "enable metrics")
 }
 
 func (t *Tools) init(out io.Writer) error {
-	// tracing
-	err := traceExporter(t.traceExport)
-	if err != nil {
-		return fmt.Errorf("setup trace exporter: %w", err)
-	}
+	var err error
 
 	// logging
 	t.Log, err = logExporter(t.logfmt, t.verbosity, out, t.gchatEndpoint)
 	if err != nil {
 		return fmt.Errorf("setup log exporter: %w", err)
+	}
+	otel.SetErrorHandler(otel.ErrorHandlerFunc(func(cause error) {
+		t.Log.WithName("otel").Error(err, "otel error")
+	}))
+
+	// tracing
+	err = traceExporter(t.traceExport)
+	if err != nil {
+		return fmt.Errorf("setup trace exporter: %w", err)
+	}
+
+	// metrics
+	err = metricExporter(t.metricExport)
+	if err != nil {
+		return fmt.Errorf("setup metric exporter: %w", err)
 	}
 
 	return nil
