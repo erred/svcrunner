@@ -216,6 +216,23 @@ func traceExporter(exporter string) error {
 	if !ok {
 		return fmt.Errorf("failed to read buildinfo")
 	}
+	version := bi.Main.Version
+	if version == "(devel)" {
+		var t time.Time
+		var r, d string
+		for _, seting := range bi.Settings {
+			switch seting.Key {
+			case "vcs.time":
+				t, _ = time.Parse(time.RFC3339, seting.Value)
+			case "vcs.revision":
+				r = seting.Value
+			case "vcs.modified":
+				d = "-dirty"
+			}
+		}
+		version = "v0.0.0-" + t.Format("20060102150405") + "-" + r[:12] + d
+	}
+
 	ctx := context.TODO()
 	res, err := resource.New(ctx,
 		resource.WithFromEnv(),
@@ -223,6 +240,7 @@ func traceExporter(exporter string) error {
 		resource.WithDetectors(gcp.NewCloudRun()),
 		resource.WithAttributes(
 			semconv.ServiceNameKey.String(bi.Path),
+			semconv.ServiceVersionKey.String(version),
 		),
 	)
 	if err != nil {
