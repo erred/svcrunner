@@ -7,17 +7,23 @@ import (
 	"net/http"
 	"runtime/debug"
 	"strings"
+	"sync"
 	"time"
 
 	cloudtrace "github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/trace"
 	"github.com/go-logr/logr"
 	"github.com/go-logr/logr/funcr"
 	"go.opentelemetry.io/contrib/detectors/gcp"
+	"go.opentelemetry.io/contrib/instrumentation/host"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"go.opentelemetry.io/contrib/instrumentation/runtime"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/exporters/stdout/stdouttrace"
+	"go.opentelemetry.io/otel/metric/global"
 	"go.opentelemetry.io/otel/propagation"
+	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.10.0"
@@ -212,39 +218,9 @@ func traceExporter(exporter string) error {
 		return nil
 	}
 
-	bi, ok := debug.ReadBuildInfo()
-	if !ok {
-		return fmt.Errorf("failed to read buildinfo")
-	}
-	version := bi.Main.Version
-	if version == "(devel)" {
-		var t time.Time
-		var r, d string
-		for _, seting := range bi.Settings {
-			switch seting.Key {
-			case "vcs.time":
-				t, _ = time.Parse(time.RFC3339, seting.Value)
-			case "vcs.revision":
-				r = seting.Value
-			case "vcs.modified":
-				d = "-dirty"
-			}
-		}
-		version = "v0.0.0-" + t.Format("20060102150405") + "-" + r[:12] + d
-	}
-
-	ctx := context.TODO()
-	res, err := resource.New(ctx,
-		resource.WithFromEnv(),
-		resource.WithTelemetrySDK(),
-		resource.WithDetectors(gcp.NewCloudRun()),
-		resource.WithAttributes(
-			semconv.ServiceNameKey.String(bi.Path),
-			semconv.ServiceVersionKey.String(version),
-		),
-	)
+	res, err := createResource()
 	if err != nil {
-		return fmt.Errorf("setup otel resource detectors: %w", err)
+		return err
 	}
 
 	tpOpts = append(tpOpts, sdktrace.WithResource(res))
@@ -261,4 +237,82 @@ func traceExporter(exporter string) error {
 	)
 
 	return nil
+}
+
+func metricExporter(exporter string) error {
+	var mpOpts []sdkmetric.Option
+	switch exporter {
+	case "otlp":
+		ctx := context.Background()
+		exporter, err := otlpmetricgrpc.New(ctx)
+		if err != nil {
+			return fmt.Errorf("create otlpgrpc metric exporter: %w", err)
+		}
+		mpOpts = append(mpOpts, sdkmetric.WithReader(sdkmetric.NewPeriodicReader(exporter, sdkmetric.WithInterval(5*time.Second))))
+	default:
+		return nil
+	}
+
+	res, err := createResource()
+	if err != nil {
+		return err
+	}
+	mpOpts = append(mpOpts, sdkmetric.WithResource(res))
+
+	mp := sdkmetric.NewMeterProvider(mpOpts...)
+	global.SetMeterProvider(mp)
+
+	host.Start()
+	runtime.Start()
+
+	return nil
+}
+
+var (
+	otelResourceErr  error
+	otelResource     *resource.Resource
+	otelResourceOnce sync.Once
+)
+
+func createResource() (*resource.Resource, error) {
+	var err error
+	otelResourceOnce.Do(func() {
+		bi, ok := debug.ReadBuildInfo()
+		if !ok {
+			otelResourceErr = fmt.Errorf("failed to read buildinfo")
+			return
+		}
+		version := bi.Main.Version
+		if version == "(devel)" {
+			var t time.Time
+			var r, d string
+			for _, seting := range bi.Settings {
+				switch seting.Key {
+				case "vcs.time":
+					t, _ = time.Parse(time.RFC3339, seting.Value)
+				case "vcs.revision":
+					r = seting.Value
+				case "vcs.modified":
+					d = "-dirty"
+				}
+			}
+			version = "v0.0.0-" + t.Format("20060102150405") + "-" + r[:12] + d
+		}
+
+		ctx := context.TODO()
+		otelResource, otelResourceErr = resource.New(ctx,
+			resource.WithFromEnv(),
+			resource.WithTelemetrySDK(),
+			resource.WithDetectors(gcp.NewCloudRun()),
+			resource.WithAttributes(
+				semconv.ServiceNameKey.String(bi.Path),
+				semconv.ServiceVersionKey.String(version),
+			),
+		)
+		if otelResourceErr != nil {
+			err = fmt.Errorf("setup otel resource detectors: %w", err)
+			return
+		}
+	})
+	return otelResource, otelResourceErr
 }
