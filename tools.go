@@ -15,6 +15,7 @@ import (
 	"go.opentelemetry.io/contrib/detectors/gcp"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/exporters/stdout/stdouttrace"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
@@ -193,6 +194,13 @@ func traceExporter(exporter string) error {
 			return fmt.Errorf("create google cloud trace exporter: %w", err)
 		}
 
+		tpOpts = append(tpOpts, sdktrace.WithSyncer(exporter))
+	case "otlp":
+		ctx := context.Background()
+		exporter, err := otlptracegrpc.New(ctx)
+		if err != nil {
+			return fmt.Errorf("create otlpgrpc trace exporter: %w", err)
+		}
 		tpOpts = append(tpOpts, sdktrace.WithSyncer(exporter))
 	case "stdout":
 		exporter, err := stdouttrace.New()
