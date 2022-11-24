@@ -299,17 +299,19 @@ func createResource() (*resource.Resource, error) {
 		if version == "(devel)" {
 			var t time.Time
 			var r, d string
-			for _, seting := range bi.Settings {
-				switch seting.Key {
+			for _, setting := range bi.Settings {
+				switch setting.Key {
 				case "vcs.time":
-					t, _ = time.Parse(time.RFC3339, seting.Value)
+					t, _ = time.Parse(time.RFC3339, setting.Value)
 				case "vcs.revision":
-					r = seting.Value
+					r = setting.Value
 					if r == "" {
 						r = "000000000000"
 					}
 				case "vcs.modified":
-					d = "-dirty"
+					if setting.Value == "true" {
+						d = "-dirty"
+					}
 				}
 			}
 			version = "v0.0.0-" + t.Format("20060102150405") + "-" + r[:12] + d
