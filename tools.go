@@ -305,6 +305,9 @@ func createResource() (*resource.Resource, error) {
 					t, _ = time.Parse(time.RFC3339, seting.Value)
 				case "vcs.revision":
 					r = seting.Value
+					if r == "" {
+						r = "000000000000"
+					}
 				case "vcs.modified":
 					d = "-dirty"
 				}
