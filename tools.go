@@ -237,7 +237,7 @@ func traceExporter(exportType, audience string) error {
 
 		exporter, err := otlptracegrpc.New(ctx,
 			otlptracegrpc.WithDialOption(dialOpts...),
-			otlpmetricgrpc.WithEndpoint(os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")),
+			otlptracegrpc.WithEndpoint(os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")),
 		)
 		if err != nil {
 			return fmt.Errorf("create otlpgrpc trace exporter: %w", err)
