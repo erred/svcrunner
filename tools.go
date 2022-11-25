@@ -3,6 +3,7 @@ package svcrunner
 import (
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"io"
 	"net/http"
@@ -231,7 +232,10 @@ func traceExporter(exportType, audience string) error {
 			if err != nil {
 				return fmt.Errorf("create grpc idtoken source: %w", err)
 			}
-			dialOpts = append(dialOpts, grpc.WithTransportCredentials(credentials.NewTLS(&tls.Config{InsecureSkipVerify: true})))
+			dialOpts = append(dialOpts, grpc.WithTransportCredentials(credentials.NewTLS(&tls.Config{
+				RootCAs:            otlpCA(),
+				InsecureSkipVerify: true,
+			})))
 			dialOpts = append(dialOpts, grpc.WithPerRPCCredentials(&oauth.TokenSource{TokenSource: gcpTS}))
 		}
 
@@ -285,7 +289,10 @@ func metricExporter(exportType, audience string) error {
 			if err != nil {
 				return fmt.Errorf("create grpc idtoken source: %w", err)
 			}
-			dialOpts = append(dialOpts, grpc.WithTransportCredentials(credentials.NewTLS(&tls.Config{InsecureSkipVerify: true})))
+			dialOpts = append(dialOpts, grpc.WithTransportCredentials(credentials.NewTLS(&tls.Config{
+				RootCAs:            otlpCA(),
+				InsecureSkipVerify: true,
+			})))
 			dialOpts = append(dialOpts, grpc.WithPerRPCCredentials(&oauth.TokenSource{TokenSource: gcpTS}))
 		}
 
@@ -365,4 +372,21 @@ func createResource() (*resource.Resource, error) {
 		}
 	})
 	return otelResource, otelResourceErr
+}
+
+var (
+	otlpRootCA     *x509.CertPool
+	otlpRootCAOnce sync.Once
+)
+
+func otlpCA() *x509.CertPool {
+	otlpRootCAOnce.Do(func() {
+		if certFile := os.Getenv("OTEL_EXPORTER_OTLP_CERTIFICATE"); certFile != "" {
+			otlpRootCA = x509.NewCertPool()
+			b, _ := os.ReadFile(certFile)
+			otlpRootCA.AppendCertsFromPEM(b)
+		}
+		otlpRootCA, _ = x509.SystemCertPool()
+	})
+	return otlpRootCA
 }
