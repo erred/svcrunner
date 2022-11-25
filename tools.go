@@ -2,6 +2,7 @@ package svcrunner
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"io"
 	"net/http"
@@ -30,10 +31,16 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"go.seankhliao.com/gchat"
 	"go.seankhliao.com/svcrunner/envflag"
+	"google.golang.org/api/idtoken"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/oauth"
 )
 
 type Tools struct {
 	Log logr.Logger
+
+	otlpAudience string
 
 	// logging
 	logfmt        string
@@ -50,6 +57,7 @@ func (t *Tools) register(c *envflag.Config) {
 	c.StringVar(&t.gchatEndpoint, "log.errors-gchat", "", "log errors to google chat (only for json+gcp): $webhook_url")
 	c.StringVar(&t.traceExport, "trace.export", "otlp", "enable tracing")
 	c.StringVar(&t.metricExport, "metric.export", "otlp", "enable metrics")
+	c.StringVar(&t.otlpAudience, "otlp.audience", "", "use oidc with the given audience")
 }
 
 func (t *Tools) init(out io.Writer) error {
@@ -65,13 +73,13 @@ func (t *Tools) init(out io.Writer) error {
 	}))
 
 	// tracing
-	err = traceExporter(t.traceExport)
+	err = traceExporter(t.traceExport, t.otlpAudience)
 	if err != nil {
 		return fmt.Errorf("setup trace exporter: %w", err)
 	}
 
 	// metrics
-	err = metricExporter(t.metricExport)
+	err = metricExporter(t.metricExport, t.otlpAudience)
 	if err != nil {
 		return fmt.Errorf("setup metric exporter: %w", err)
 	}
@@ -204,9 +212,9 @@ func logExporter(format string, verbosity int, out io.Writer, gchatEndpoint stri
 	return log, nil
 }
 
-func traceExporter(exporter string) error {
+func traceExporter(exportType, audience string) error {
 	var tpOpts []sdktrace.TracerProviderOption
-	switch exporter {
+	switch exportType {
 	case "cloudtrace":
 		exporter, err := cloudtrace.New()
 		if err != nil {
@@ -216,7 +224,19 @@ func traceExporter(exporter string) error {
 		tpOpts = append(tpOpts, sdktrace.WithSyncer(exporter))
 	case "otlp":
 		ctx := context.Background()
-		exporter, err := otlptracegrpc.New(ctx)
+		var dialOpts []grpc.DialOption
+		if audience != "" {
+			gcpTS, err := idtoken.NewTokenSource(ctx, audience)
+			if err != nil {
+				return fmt.Errorf("create grpc idtoken source: %w", err)
+			}
+			dialOpts = append(dialOpts, grpc.WithTransportCredentials(credentials.NewTLS(&tls.Config{InsecureSkipVerify: true})))
+			dialOpts = append(dialOpts, grpc.WithPerRPCCredentials(&oauth.TokenSource{TokenSource: gcpTS}))
+		}
+
+		exporter, err := otlptracegrpc.New(ctx,
+			otlptracegrpc.WithDialOption(dialOpts...),
+		)
 		if err != nil {
 			return fmt.Errorf("create otlpgrpc trace exporter: %w", err)
 		}
@@ -252,12 +272,24 @@ func traceExporter(exporter string) error {
 	return nil
 }
 
-func metricExporter(exporter string) error {
+func metricExporter(exportType, audience string) error {
 	var mpOpts []sdkmetric.Option
-	switch exporter {
+	switch exportType {
 	case "otlp":
 		ctx := context.Background()
-		exporter, err := otlpmetricgrpc.New(ctx)
+		var dialOpts []grpc.DialOption
+		if audience != "" {
+			gcpTS, err := idtoken.NewTokenSource(ctx, audience)
+			if err != nil {
+				return fmt.Errorf("create grpc idtoken source: %w", err)
+			}
+			dialOpts = append(dialOpts, grpc.WithTransportCredentials(credentials.NewTLS(&tls.Config{InsecureSkipVerify: true})))
+			dialOpts = append(dialOpts, grpc.WithPerRPCCredentials(&oauth.TokenSource{TokenSource: gcpTS}))
+		}
+
+		exporter, err := otlpmetricgrpc.New(ctx,
+			otlpmetricgrpc.WithDialOption(dialOpts...),
+		)
 		if err != nil {
 			return fmt.Errorf("create otlpgrpc metric exporter: %w", err)
 		}
