@@ -68,7 +68,7 @@ func (t *Tools) init(out io.Writer) error {
 	if err != nil {
 		return fmt.Errorf("setup log exporter: %w", err)
 	}
-	otel.SetErrorHandler(otel.ErrorHandlerFunc(func(cause error) {
+	otel.SetErrorHandler(otel.ErrorHandlerFunc(func(err error) {
 		t.Log.WithName("otel").Error(err, "otel error")
 	}))
 
