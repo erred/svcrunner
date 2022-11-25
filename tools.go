@@ -381,12 +381,13 @@ var (
 
 func otlpCA() *x509.CertPool {
 	otlpRootCAOnce.Do(func() {
-		if certFile := os.Getenv("OTEL_EXPORTER_OTLP_CERTIFICATE"); certFile != "" {
-			otlpRootCA = x509.NewCertPool()
-			b, _ := os.ReadFile(certFile)
-			otlpRootCA.AppendCertsFromPEM(b)
+		b, err := os.ReadFile("/var/run/ko/ca.crt")
+		if err != nil {
+			otlpRootCA, _ = x509.SystemCertPool()
+			return
 		}
-		otlpRootCA, _ = x509.SystemCertPool()
+		otlpRootCA = x509.NewCertPool()
+		otlpRootCA.AppendCertsFromPEM(b)
 	})
 	return otlpRootCA
 }
