@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"runtime/debug"
 	"strings"
 	"sync"
@@ -236,6 +237,7 @@ func traceExporter(exportType, audience string) error {
 
 		exporter, err := otlptracegrpc.New(ctx,
 			otlptracegrpc.WithDialOption(dialOpts...),
+			otlpmetricgrpc.WithEndpoint(os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")),
 		)
 		if err != nil {
 			return fmt.Errorf("create otlpgrpc trace exporter: %w", err)
@@ -289,6 +291,7 @@ func metricExporter(exportType, audience string) error {
 
 		exporter, err := otlpmetricgrpc.New(ctx,
 			otlpmetricgrpc.WithDialOption(dialOpts...),
+			otlpmetricgrpc.WithEndpoint(os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")),
 		)
 		if err != nil {
 			return fmt.Errorf("create otlpgrpc metric exporter: %w", err)
@@ -330,16 +333,13 @@ func createResource() (*resource.Resource, error) {
 		version := bi.Main.Version
 		if version == "(devel)" {
 			var t time.Time
-			var r, d string
+			r, d := "000000000000", ""
 			for _, setting := range bi.Settings {
 				switch setting.Key {
 				case "vcs.time":
 					t, _ = time.Parse(time.RFC3339, setting.Value)
 				case "vcs.revision":
 					r = setting.Value
-					if r == "" {
-						r = "000000000000"
-					}
 				case "vcs.modified":
 					if setting.Value == "true" {
 						d = "-dirty"
