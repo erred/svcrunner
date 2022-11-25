@@ -35,6 +35,7 @@ import (
 	"go.seankhliao.com/svcrunner/envflag"
 	"google.golang.org/api/idtoken"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/backoff"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/oauth"
 )
@@ -74,14 +75,20 @@ func (t *Tools) init(out io.Writer) error {
 		t.Log.WithName("otel").Error(err, "otel error")
 	}))
 
+	ctx := context.Background()
+	conn, err := t.grpcConn(ctx)
+	if err != nil {
+		return fmt.Errorf("setup grpc conn")
+	}
+
 	// tracing
-	err = traceExporter(t.traceExport, t.otlpAudience)
+	err = t.traceExporter(conn)
 	if err != nil {
 		return fmt.Errorf("setup trace exporter: %w", err)
 	}
 
 	// metrics
-	err = metricExporter(t.metricExport, t.otlpAudience)
+	err = t.metricExporter(conn)
 	if err != nil {
 		return fmt.Errorf("setup metric exporter: %w", err)
 	}
@@ -214,9 +221,9 @@ func logExporter(format string, verbosity int, out io.Writer, gchatEndpoint stri
 	return log, nil
 }
 
-func traceExporter(exportType, audience string) error {
+func (t *Tools) traceExporter(conn *grpc.ClientConn) error {
 	var tpOpts []sdktrace.TracerProviderOption
-	switch exportType {
+	switch t.traceExport {
 	case "cloudtrace":
 		exporter, err := cloudtrace.New()
 		if err != nil {
@@ -226,22 +233,8 @@ func traceExporter(exportType, audience string) error {
 		tpOpts = append(tpOpts, sdktrace.WithSyncer(exporter))
 	case "otlp":
 		ctx := context.Background()
-		var dialOpts []grpc.DialOption
-		if audience != "" {
-			gcpTS, err := idtoken.NewTokenSource(ctx, audience)
-			if err != nil {
-				return fmt.Errorf("create grpc idtoken source: %w", err)
-			}
-			dialOpts = append(dialOpts, grpc.WithTransportCredentials(credentials.NewTLS(&tls.Config{
-				RootCAs:            otlpCA(),
-				InsecureSkipVerify: true,
-			})))
-			dialOpts = append(dialOpts, grpc.WithPerRPCCredentials(&oauth.TokenSource{TokenSource: gcpTS}))
-		}
-
 		exporter, err := otlptracegrpc.New(ctx,
-			otlptracegrpc.WithDialOption(dialOpts...),
-			otlptracegrpc.WithEndpoint(os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")),
+			otlptracegrpc.WithGRPCConn(conn),
 		)
 		if err != nil {
 			return fmt.Errorf("create otlpgrpc trace exporter: %w", err)
@@ -278,27 +271,13 @@ func traceExporter(exportType, audience string) error {
 	return nil
 }
 
-func metricExporter(exportType, audience string) error {
+func (t *Tools) metricExporter(conn *grpc.ClientConn) error {
 	var mpOpts []sdkmetric.Option
-	switch exportType {
+	switch t.metricExport {
 	case "otlp":
 		ctx := context.Background()
-		var dialOpts []grpc.DialOption
-		if audience != "" {
-			gcpTS, err := idtoken.NewTokenSource(ctx, audience)
-			if err != nil {
-				return fmt.Errorf("create grpc idtoken source: %w", err)
-			}
-			dialOpts = append(dialOpts, grpc.WithTransportCredentials(credentials.NewTLS(&tls.Config{
-				RootCAs:            otlpCA(),
-				InsecureSkipVerify: true,
-			})))
-			dialOpts = append(dialOpts, grpc.WithPerRPCCredentials(&oauth.TokenSource{TokenSource: gcpTS}))
-		}
-
 		exporter, err := otlpmetricgrpc.New(ctx,
-			otlpmetricgrpc.WithDialOption(dialOpts...),
-			otlpmetricgrpc.WithEndpoint(os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")),
+			otlpmetricgrpc.WithGRPCConn(conn),
 		)
 		if err != nil {
 			return fmt.Errorf("create otlpgrpc metric exporter: %w", err)
@@ -379,15 +358,49 @@ var (
 	otlpRootCAOnce sync.Once
 )
 
-func otlpCA() *x509.CertPool {
+func (t *Tools) otlpCA() *x509.CertPool {
 	otlpRootCAOnce.Do(func() {
-		b, err := os.ReadFile("/var/run/ko/ca.crt")
-		if err != nil {
-			otlpRootCA, _ = x509.SystemCertPool()
-			return
-		}
-		otlpRootCA = x509.NewCertPool()
-		otlpRootCA.AppendCertsFromPEM(b)
 	})
 	return otlpRootCA
+}
+
+func (t *Tools) grpcConn(ctx context.Context) (*grpc.ClientConn, error) {
+	gcpTS, err := idtoken.NewTokenSource(ctx, t.otlpAudience)
+	if err != nil {
+		return nil, fmt.Errorf("create grpc idtoken source: %w", err)
+	}
+
+	caFile := "/var/run/ko/ca.crt"
+	var pool *x509.CertPool
+	b, err := os.ReadFile(caFile)
+	if err != nil {
+		t.Log.WithName("svcrunner").Error(err, "read ca file, falling back to system roots", "file", caFile)
+		pool, err = x509.SystemCertPool()
+		if err != nil {
+			t.Log.WithName("svcrunner").Error(err, "get system roots")
+		}
+	} else {
+		pool = x509.NewCertPool()
+		pool.AppendCertsFromPEM(b)
+	}
+	conn, err := grpc.Dial(os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT"),
+		grpc.FailOnNonTempDialError(true),
+		grpc.WithConnectParams(grpc.ConnectParams{
+			Backoff: backoff.Config{
+				BaseDelay:  time.Second,
+				Multiplier: 2,
+				Jitter:     0.2,
+				MaxDelay:   time.Minute,
+			},
+		}),
+		grpc.WithPerRPCCredentials(&oauth.TokenSource{TokenSource: gcpTS}),
+		grpc.WithTransportCredentials(credentials.NewTLS(&tls.Config{
+			RootCAs:            pool,
+			InsecureSkipVerify: true,
+		})),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("dial grpc conn: %w", err)
+	}
+	return conn, nil
 }
