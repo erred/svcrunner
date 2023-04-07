@@ -98,6 +98,7 @@ func (s *Server) Run(ctx context.Context) error {
 		}
 	}
 
+	s.O.L.LogAttrs(ctx, slog.LevelInfo, "starting server")
 	err = s.http.Serve(lis)
 	if err != nil && !errors.Is(err, http.ErrServerClosed) {
 		return s.O.Err(ctx, "unexpected server shutdown", err)

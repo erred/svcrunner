@@ -5,7 +5,9 @@ import (
 	"flag"
 	"io"
 	"os"
+	"path"
 	"runtime/debug"
+	"strings"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -42,7 +44,11 @@ func New(c Config) *O {
 
 	bi, _ := debug.ReadBuildInfo()
 	fullname := bi.Main.Path
-	o.N = "earbug"
+	d, b := path.Split(fullname)
+	if strings.HasPrefix(b, "v") && !strings.ContainsAny(b[1:], "abcdefghijklmnopqrstuvwxyz") {
+		b = path.Base(d)
+	}
+	o.N = b
 
 	defer func() {
 		// always set instrumentation, even if they may be noops
@@ -65,7 +71,9 @@ func New(c Config) *O {
 
 		otelLog := o.L.WithGroup("otel")
 		otel.SetErrorHandler(otel.ErrorHandlerFunc(func(err error) {
-			otelLog.LogAttrs(ctx, slog.LevelWarn, "otel error")
+			otelLog.LogAttrs(ctx, slog.LevelWarn, "otel error",
+				slog.String("error", err.Error()),
+			)
 		}))
 
 		te, err := otlptracegrpc.New(ctx)
