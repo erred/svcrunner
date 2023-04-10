@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"io"
+	"log/slog"
 	"os"
 	"path"
 	"runtime/debug"
@@ -19,7 +20,6 @@ import (
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/trace"
-	"golang.org/x/exp/slog"
 )
 
 type Config struct {

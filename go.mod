@@ -1,6 +1,6 @@
 module go.seankhliao.com/svcrunner/v2
 
-go 1.20
+go 1.21
 
 require (
 	go.opentelemetry.io/otel v1.15.0-rc.2
@@ -10,7 +10,6 @@ require (
 	go.opentelemetry.io/otel/sdk v1.15.0-rc.2
 	go.opentelemetry.io/otel/sdk/metric v0.38.0-rc.2
 	go.opentelemetry.io/otel/trace v1.15.0-rc.2
-	golang.org/x/exp v0.0.0-20230321023759-10a507213a29
 	tailscale.com v1.1.1-0.20230408010101-e978299bf067
 )
 
@@ -81,6 +80,7 @@ require (
 	go4.org/mem v0.0.0-20220726221520-4f986261bf13 // indirect
 	go4.org/netipx v0.0.0-20230303233057-f1b76eb4bb35 // indirect
 	golang.org/x/crypto v0.8.0 // indirect
+	golang.org/x/exp v0.0.0-20230321023759-10a507213a29 // indirect
 	golang.org/x/mod v0.10.0 // indirect
 	golang.org/x/net v0.9.0 // indirect
 	golang.org/x/sync v0.1.0 // indirect

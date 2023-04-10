@@ -5,12 +5,12 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"log/slog"
 	"net"
 	"net/http"
 	"path/filepath"
 
 	"go.seankhliao.com/svcrunner/v2/observability"
-	"golang.org/x/exp/slog"
 	"tailscale.com/tsnet"
 )
 

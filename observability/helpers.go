@@ -3,11 +3,11 @@ package observability
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net/http"
 
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
-	"golang.org/x/exp/slog"
 )
 
 func (o *O) Err(ctx context.Context, msg string, err error, attrs ...slog.Attr) error {
