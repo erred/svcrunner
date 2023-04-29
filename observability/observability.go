@@ -15,6 +15,7 @@ import (
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/metric"
+	"go.opentelemetry.io/otel/metric/global"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/instrumentation"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
@@ -53,7 +54,7 @@ func New(c Config) *O {
 	defer func() {
 		// always set instrumentation, even if they may be noops
 		o.T = otel.Tracer(fullname)
-		o.M = otel.Meter(fullname)
+		o.M = global.Meter(fullname)
 	}()
 
 	logOptions := &slog.HandlerOptions{
@@ -119,7 +120,7 @@ func New(c Config) *O {
 				}),
 			})),
 		)
-		otel.SetMeterProvider(mp)
+		global.SetMeterProvider(mp)
 	}
 
 	return o
