@@ -15,7 +15,6 @@ import (
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/metric"
-	"go.opentelemetry.io/otel/metric/global"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/instrumentation"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
@@ -54,17 +53,16 @@ func New(c Config) *O {
 	defer func() {
 		// always set instrumentation, even if they may be noops
 		o.T = otel.Tracer(fullname)
-		o.M = global.Meter(fullname)
+		o.M = otel.Meter(fullname)
 	}()
 
-	logOptions := &slog.HandlerOptions{
-		Level: c.LogLevel,
-	}
 	out := c.LogOutput
 	if out == nil {
 		out = os.Stdout
 	}
-	o.H = logOptions.NewJSONHandler(out)
+	o.H = slog.NewJSONHandler(out, &slog.HandlerOptions{
+		Level: c.LogLevel,
+	})
 	o.L = slog.New(o.H)
 
 	if os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT") != "" {
@@ -120,7 +118,7 @@ func New(c Config) *O {
 				}),
 			})),
 		)
-		global.SetMeterProvider(mp)
+		otel.SetMeterProvider(mp)
 	}
 
 	return o
