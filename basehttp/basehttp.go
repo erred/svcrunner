@@ -7,63 +7,73 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"os"
+	"time"
 
-	"go.seankhliao.com/svcrunner/v2/observability"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"go.seankhliao.com/svcrunner/v3/observability"
+	"golang.org/x/net/http2"
+	"golang.org/x/net/http2/h2c"
 )
 
 type Config struct {
 	Address string
-	O       observability.Config
 }
 
-func (c *Config) SetFlags(f *flag.FlagSet) {
-	c.O.SetFlags(f)
-	f.StringVar(&c.Address, "listen.address", ":8080", "server address")
+func (c *Config) SetFlags(fset *flag.FlagSet) {
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+	fset.StringVar(&c.Address, "http.addr", ":"+port, "http server address")
 }
 
-type Server struct {
-	O   *observability.O
-	Mux *http.ServeMux
-
-	http *http.Server
+type HTTP struct {
+	O      *observability.O
+	Mux    *http.ServeMux
+	Server *http.Server
+	Client *http.Client
 }
 
-func New(ctx context.Context, c *Config) *Server {
-	o := observability.New(c.O)
+func New(ctx context.Context, o *observability.O, c *Config) *HTTP {
+	o = o.Component("basehttp")
 	mux := http.NewServeMux()
-	return &Server{
-		O:   o,
-		Mux: mux,
-		http: &http.Server{
-			Addr:     c.Address,
-			Handler:  mux,
-			ErrorLog: slog.NewLogLogger(o.H.WithGroup("nethttp"), slog.LevelWarn),
-		},
+	h2Server := &http2.Server{}
+	server := &http.Server{
+		Addr:              c.Address,
+		Handler:           otelhttp.NewHandler(h2c.NewHandler(mux, h2Server), "serve http"),
+		ReadHeaderTimeout: 10 * time.Second,
+		ErrorLog:          slog.NewLogLogger(o.H, slog.LevelWarn),
+	}
+	client := &http.Client{
+		Transport: otelhttp.NewTransport(http.DefaultTransport),
+	}
+	return &HTTP{
+		O:      o,
+		Mux:    mux,
+		Server: server,
+		Client: client,
 	}
 }
 
-func (s *Server) Run(ctx context.Context) error {
+func (h *HTTP) Run(ctx context.Context) error {
+	h.O.L.LogAttrs(ctx, slog.LevelInfo, "starting listen", slog.String("address", h.Server.Addr))
+	lis, err := net.Listen("tcp", h.Server.Addr)
+	if err != nil {
+		return h.O.Err(ctx, "listen locally", err)
+	}
 	go func() {
 		<-ctx.Done()
-		s.O.L.LogAttrs(ctx, slog.LevelInfo, "shutting down",
-			slog.String("reason", context.Cause(ctx).Error()),
-		)
-		err := s.http.Shutdown(context.Background())
+		err := h.Server.Shutdown(context.Background())
 		if err != nil {
-			s.O.Err(ctx, "unclean shutdown", err)
+			h.O.Err(ctx, "error closing server", err, slog.String("address", h.Server.Addr))
 		}
 	}()
 
-	s.O.L.LogAttrs(ctx, slog.LevelInfo, "starting listen", slog.String("address", s.http.Addr))
-	lis, err := net.Listen("tcp", s.http.Addr)
-	if err != nil {
-		return s.O.Err(ctx, "listen locally", err)
-	}
-
-	s.O.L.LogAttrs(ctx, slog.LevelInfo, "starting server")
-	err = s.http.Serve(lis)
+	h.O.L.LogAttrs(ctx, slog.LevelInfo, "starting server")
+	err = h.Server.Serve(lis)
 	if err != nil && !errors.Is(err, http.ErrServerClosed) {
-		return s.O.Err(ctx, "unexpected server shutdown", err)
+		return h.O.Err(ctx, "error serving http", err)
 	}
 	return nil
 }

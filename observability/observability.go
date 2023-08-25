@@ -3,6 +3,7 @@ package observability
 import (
 	"context"
 	"flag"
+	"fmt"
 	"io"
 	"log/slog"
 	"os"
@@ -20,15 +21,26 @@ import (
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/trace"
+	"go.seankhliao.com/svcrunner/v3/jsonlog"
 )
 
 type Config struct {
+	LogFormat string
 	LogOutput io.Writer
 	LogLevel  slog.Level
 }
 
 func (c *Config) SetFlags(f *flag.FlagSet) {
 	f.TextVar(&c.LogLevel, "log.level", slog.LevelInfo, "log level: debug|info|warn|error")
+	f.Func("log.format", "log format: logfmt|json", func(s string) error {
+		switch s {
+		case "logfmt", "json":
+		default:
+			return fmt.Errorf("unknown log format: %q", s)
+		}
+		c.LogFormat = s
+		return nil
+	})
 }
 
 type O struct {
@@ -45,7 +57,7 @@ func New(c Config) *O {
 	bi, _ := debug.ReadBuildInfo()
 	fullname := bi.Main.Path
 	d, b := path.Split(fullname)
-	if strings.HasPrefix(b, "v") && !strings.ContainsAny(b[1:], "abcdefghijklmnopqrstuvwxyz") {
+	if strings.HasPrefix(b, "v") && !strings.ContainsAny(b[1:], "abcdefghijklmnopqrstuvwxyz-") {
 		b = path.Base(d)
 	}
 	o.N = b
@@ -60,14 +72,20 @@ func New(c Config) *O {
 	if out == nil {
 		out = os.Stdout
 	}
-	o.H = slog.NewJSONHandler(out, &slog.HandlerOptions{
-		Level: c.LogLevel,
-	})
+	switch c.LogFormat {
+	case "json":
+		o.H = jsonlog.New(c.LogLevel, out)
+	case "logfmt":
+		o.H = slog.NewTextHandler(out, &slog.HandlerOptions{
+			Level: c.LogLevel,
+		})
+	}
 	o.L = slog.New(o.H)
 
 	if os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT") != "" {
 		ctx := context.Background()
 
+		// opentelemetry error handler
 		otelLog := o.L.WithGroup("otel")
 		otel.SetErrorHandler(otel.ErrorHandlerFunc(func(err error) {
 			otelLog.LogAttrs(ctx, slog.LevelWarn, "otel error",
@@ -75,6 +93,7 @@ func New(c Config) *O {
 			)
 		}))
 
+		// tracing
 		te, err := otlptracegrpc.New(ctx)
 		if err != nil {
 			otelLog.LogAttrs(ctx, slog.LevelError, "create trace exporter",
@@ -91,6 +110,7 @@ func New(c Config) *O {
 			propagation.TraceContext{},
 		))
 
+		// metrics
 		me, err := otlpmetricgrpc.New(ctx)
 		if err != nil {
 			otelLog.LogAttrs(ctx, slog.LevelError, "create metric exporter",
@@ -122,4 +142,14 @@ func New(c Config) *O {
 	}
 
 	return o
+}
+
+func (o *O) Component(name string) *O {
+	return &O{
+		N: o.N,
+		L: o.L.WithGroup(name),
+		H: o.H.WithGroup(name),
+		T: o.T,
+		M: o.M,
+	}
 }

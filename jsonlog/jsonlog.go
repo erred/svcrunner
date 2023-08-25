@@ -167,7 +167,7 @@ func (h *state) clone() *state {
 		slices.Clone(h.separator),
 		buf,
 	}
-	runtime.SetFinalizer(&s, func(s *state) {
+	runtime.SetFinalizer(s, func(s *state) {
 		pool.Put(&buf)
 	})
 	return s
