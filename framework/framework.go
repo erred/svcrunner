@@ -20,7 +20,7 @@ type Config struct {
 
 func Run(c Config) {
 	// configs
-	fset := flag.NewFlagSet("earbug", flag.ExitOnError)
+	fset := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 	oconf := &observability.Config{}
 	oconf.SetFlags(fset)
 	hconf := &basehttp.Config{}
