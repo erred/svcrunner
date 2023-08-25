@@ -51,7 +51,7 @@ type O struct {
 	M metric.Meter
 }
 
-func New(c Config) *O {
+func New(c *Config) *O {
 	o := &O{}
 
 	bi, _ := debug.ReadBuildInfo()
