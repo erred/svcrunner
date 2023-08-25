@@ -32,6 +32,7 @@ type Config struct {
 
 func (c *Config) SetFlags(f *flag.FlagSet) {
 	f.TextVar(&c.LogLevel, "log.level", slog.LevelInfo, "log level: debug|info|warn|error")
+	c.LogFormat = "json" // default
 	f.Func("log.format", "log format: logfmt|json", func(s string) error {
 		switch s {
 		case "logfmt", "json":
