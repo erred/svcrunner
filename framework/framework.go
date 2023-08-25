@@ -51,7 +51,9 @@ func Run(c Config) {
 			if err != nil {
 				return o.Err(ctx, "app start", err)
 			}
-			defer cleanup()
+			if cleanup != nil {
+				defer cleanup()
+			}
 		}
 
 		err := h.Run(ctx)
