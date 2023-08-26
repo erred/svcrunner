@@ -94,8 +94,13 @@ func New(c *Config) *O {
 			)
 		}))
 
+		// grpc common
+		serviceConfig := `{"loadBalancingConfig":[{"round_robin":{}}]}`
+
 		// tracing
-		te, err := otlptracegrpc.New(ctx)
+		te, err := otlptracegrpc.New(ctx,
+			otlptracegrpc.WithServiceConfig(serviceConfig),
+		)
 		if err != nil {
 			otelLog.LogAttrs(ctx, slog.LevelError, "create trace exporter",
 				slog.String("error", err.Error()),
@@ -112,7 +117,9 @@ func New(c *Config) *O {
 		))
 
 		// metrics
-		me, err := otlpmetricgrpc.New(ctx)
+		me, err := otlpmetricgrpc.New(ctx,
+			otlpmetricgrpc.WithServiceConfig(serviceConfig),
+		)
 		if err != nil {
 			otelLog.LogAttrs(ctx, slog.LevelError, "create metric exporter",
 				slog.String("error", err.Error()),
