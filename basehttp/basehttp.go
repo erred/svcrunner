@@ -9,9 +9,11 @@ import (
 	"net/http"
 	"os"
 	"time"
+	_ "time/tzdata"
 
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.seankhliao.com/svcrunner/v3/observability"
+	_ "golang.org/x/crypto/x509roots/fallback"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/h2c"
 )
