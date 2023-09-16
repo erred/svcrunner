@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"io"
 	"log/slog"
-	"runtime"
 	"slices"
 	"sync"
 
@@ -157,6 +156,8 @@ func (h *state) clone() *state {
 	if cap(h.buf) > stateBufferSize {
 		buf = slices.Clone(h.buf)
 	} else {
+		// unsure when we can use pool.Put
+		// setting a runtime.Finalizer appears to be wrong and crashes the fuzzer?
 		buf = *pool.Get().(*[]byte)
 		buf = buf[:len(h.buf)]
 	}
@@ -167,9 +168,6 @@ func (h *state) clone() *state {
 		slices.Clone(h.separator),
 		buf,
 	}
-	runtime.SetFinalizer(s, func(s *state) {
-		pool.Put(&buf)
-	})
 	return s
 }
 
