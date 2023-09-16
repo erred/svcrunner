@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"testing"
@@ -15,13 +16,15 @@ func TestHandler(t *testing.T) {
 	buf := new(bytes.Buffer)
 	handler := New(slog.LevelInfo, buf)
 	err := slogtest.TestHandler(handler, func() []map[string]any {
+		all := buf.String()
 		dec := json.NewDecoder(buf)
 		var results []map[string]any
 		for dec.More() {
 			var result map[string]any
 			err := dec.Decode(&result)
 			if err != nil {
-				t.Errorf("unmarshal log: %v", err)
+				t.Errorf("unmarshal log: %v\n%v", err, all)
+				break
 			}
 			results = append(results, result)
 		}
@@ -29,6 +32,13 @@ func TestHandler(t *testing.T) {
 	})
 	if err != nil {
 		t.Errorf("testhandler: %v", err)
+	}
+}
+
+func BenchmarkHandler(b *testing.B) {
+	lg := slog.New(New(slog.LevelDebug, io.Discard))
+	for i := 0; i < b.N; i++ {
+		lg.LogAttrs(context.Background(), slog.LevelInfo, "this is a test message", slog.Int("aaa", 1), slog.Bool("bbb", true), slog.String("ddd", "zzzzzz"))
 	}
 }
 
