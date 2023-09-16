@@ -2,7 +2,9 @@ package jsonlog
 
 import (
 	"context"
+	"encoding"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
 	"slices"
@@ -334,8 +336,23 @@ func (h *state) attr(attr slog.Attr) {
 	h.buf = append(h.buf, []byte(":")...)
 	switch val.Kind() {
 	case slog.KindAny:
-		b, _ := json.Marshal(val.Any())
-		h.buf = append(h.buf, b...)
+		switch v := val.Any().(type) {
+		case json.Marshaler:
+			b, _ := v.MarshalJSON()
+			h.buf = appendString(h.buf, b)
+		case encoding.TextMarshaler:
+			b, _ := v.MarshalText()
+			h.buf = appendString(h.buf, b)
+		case fmt.Stringer:
+			s := v.String()
+			h.buf = appendString(h.buf, s)
+		case error:
+			s := v.Error()
+			h.buf = appendString(h.buf, s)
+		default:
+			b, _ := json.Marshal(val.Any())
+			h.buf = append(h.buf, b...)
+		}
 	case slog.KindBool:
 		h.buf = strconv.AppendBool(h.buf, val.Bool())
 	case slog.KindDuration:
