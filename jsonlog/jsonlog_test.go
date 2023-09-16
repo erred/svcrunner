@@ -7,12 +7,17 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math"
 	"os"
+	"reflect"
 	"testing"
 	"testing/slogtest"
+	"time"
+
+	"go.opentelemetry.io/otel/trace"
 )
 
-func TestHandler(t *testing.T) {
+func TestHandlerSlogtest(t *testing.T) {
 	buf := new(bytes.Buffer)
 	handler := New(slog.LevelInfo, buf)
 	err := slogtest.TestHandler(handler, func() []map[string]any {
@@ -32,6 +37,189 @@ func TestHandler(t *testing.T) {
 	})
 	if err != nil {
 		t.Errorf("testhandler: %v", err)
+	}
+}
+
+func TestHandler(t *testing.T) {
+	tid, _ := trace.TraceIDFromHex("5b8aa5a2d2c872e8321cf37308d69df2")
+	sid, _ := trace.SpanIDFromHex("051581bf3cb55c13")
+	tcs := []struct {
+		name  string
+		args  []any
+		level slog.Level
+		msg   string
+		ctx   context.Context
+		want  map[string]any
+	}{
+		{
+			name: "simple message",
+			msg:  "a simple message!",
+			want: map[string]any{
+				"message": "a simple message!",
+				"level":   "INFO",
+			},
+		}, {
+			name: "complex message",
+			msg:  "msg with quotes \" and newlines \n and slash \\ and nul \x00",
+			want: map[string]any{
+				"message": "msg with quotes \" and newlines \n and slash \\ and nul \x00",
+				"level":   "INFO",
+			},
+		}, {
+			name: "ints",
+			msg:  "ints",
+			args: []any{[]slog.Attr{slog.Int("a", 0), slog.Int("b", 1), slog.Int("c", -1), slog.Int("d", math.MaxInt64)}},
+			want: map[string]any{
+				"message": "ints",
+				"level":   "INFO",
+				"a":       0.0,
+				"b":       1.0,
+				"c":       -1.0,
+				"d":       float64(math.MaxInt64),
+			},
+		}, {
+			name: "floats",
+			msg:  "floats",
+			args: []any{[]slog.Attr{slog.Float64("a", 0.0), slog.Float64("b", -1.0), slog.Float64("c", 1.1), slog.Float64("d", math.MaxFloat64)}},
+			want: map[string]any{
+				"message": "floats",
+				"level":   "INFO",
+				"a":       0.0,
+				"b":       -1.0,
+				"c":       1.1,
+				"d":       math.MaxFloat64,
+			},
+		}, {
+			name: "bools",
+			msg:  "bools",
+			args: []any{[]slog.Attr{slog.Bool("a", true), slog.Bool("b", false)}},
+			want: map[string]any{
+				"message": "bools",
+				"level":   "INFO",
+				"a":       true,
+				"b":       false,
+			},
+		}, {
+			name: "strings",
+			msg:  "strings",
+			args: []any{[]slog.Attr{slog.String("a", "hello world")}},
+			want: map[string]any{
+				"message": "strings",
+				"level":   "INFO",
+				"a":       "hello world",
+			},
+		}, {
+			name: "time",
+			msg:  "time",
+			args: []any{[]slog.Attr{slog.Time("a", time.Date(2023, 10, 16, 6, 4, 2, 123456789, time.UTC)), slog.Duration("b", 13*time.Hour+17*time.Minute+5*time.Second+734*time.Millisecond)}},
+			want: map[string]any{
+				"message": "time",
+				"level":   "INFO",
+				"a":       "2023-10-16T06:04:02.123456789Z",
+				"b":       "13h17m5.734s",
+			},
+		}, {
+			name: "simple groups",
+			msg:  "simple groups",
+			args: []any{[]any{slog.Group("a", slog.Int("b", 1))}, "c", "d", []slog.Attr{slog.Group("e", slog.Int("f", 1))}},
+			want: map[string]any{
+				"message": "simple groups",
+				"level":   "INFO",
+				"a": map[string]any{
+					"b": 1.0,
+				},
+				"c": map[string]any{
+					"d": map[string]any{
+						"e": map[string]any{
+							"f": 1.0,
+						},
+					},
+				},
+			},
+		}, {
+			name: "empty groups",
+			msg:  "empty groups",
+			args: []any{[]any{slog.Group("a")}, []any{slog.Group("b", slog.Group("c"))}, "d", []any{slog.Group("e")}, []slog.Attr{slog.Group("e", slog.Group("f"))}},
+			want: map[string]any{
+				"message": "empty groups",
+				"level":   "INFO",
+			},
+		}, {
+			name: "alternating",
+			msg:  "alternating",
+			args: []any{"a", []any{slog.Group("b", slog.Int("c", 1), slog.Group("d", slog.Int("e", 2), slog.Group("f"))), slog.Int("g", 3)}, "h", []any{slog.Int("i", 4), slog.Group("j", slog.Int("k", 5))}, "l", []slog.Attr{slog.Int("m", 6), slog.Group("n", slog.Group("o")), slog.Int("p", 7)}},
+			want: map[string]any{
+				"message": "alternating",
+				"level":   "INFO",
+				"a": map[string]any{
+					"b": map[string]any{
+						"c": 1.0,
+						"d": map[string]any{
+							"e": 2.0,
+						},
+					},
+					"g": 3.0,
+					"h": map[string]any{
+						"i": 4.0,
+						"j": map[string]any{
+							"k": 5.0,
+						},
+						"l": map[string]any{
+							"m": 6.0,
+							"p": 7.0,
+						},
+					},
+				},
+			},
+		}, {
+			name: "context trace",
+			msg:  "context trace",
+			ctx:  trace.ContextWithSpanContext(context.Background(), trace.NewSpanContext(trace.SpanContextConfig{TraceID: tid, SpanID: sid})),
+			want: map[string]any{
+				"message":  "context trace",
+				"level":    "INFO",
+				"trace_id": "5b8aa5a2d2c872e8321cf37308d69df2",
+				"span_id":  "051581bf3cb55c13",
+			},
+		},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			buf := new(bytes.Buffer)
+			lg := slog.New(New(slog.LevelDebug, buf))
+			for i, arg := range tc.args {
+				if i == len(tc.args)-1 {
+					break
+				}
+				switch v := arg.(type) {
+				case string:
+					lg = lg.WithGroup(v)
+				case []any:
+					lg = lg.With(v...)
+				}
+			}
+			if len(tc.args) > 0 {
+				lg.LogAttrs(tc.ctx, tc.level, tc.msg, tc.args[len(tc.args)-1].([]slog.Attr)...)
+			} else {
+				lg.LogAttrs(tc.ctx, tc.level, tc.msg)
+			}
+
+			//
+			var got map[string]any
+			err := json.Unmarshal(buf.Bytes(), &got)
+			if err != nil {
+				t.Errorf("unmarshaling log line: %v", err)
+			}
+			delete(got, "time")
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Errorf("\ngot = %v\nwnt = %v", got, tc.want)
+				for k := range got {
+					if got[k] != tc.want[k] {
+						t.Errorf("diff: %v %+v %+v", k, got[k], tc.want[k])
+					}
+				}
+			}
+		})
 	}
 }
 
