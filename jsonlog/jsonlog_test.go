@@ -22,6 +22,8 @@ import (
 )
 
 func TestHandlerSlogtest(t *testing.T) {
+	t.Parallel()
+
 	buf := new(bytes.Buffer)
 	handler := New(slog.LevelInfo, buf)
 	err := slogtest.TestHandler(handler, func() []map[string]any {
@@ -45,6 +47,8 @@ func TestHandlerSlogtest(t *testing.T) {
 }
 
 func TestHandler(t *testing.T) {
+	t.Parallel()
+
 	tid, _ := trace.TraceIDFromHex("5b8aa5a2d2c872e8321cf37308d69df2")
 	sid, _ := trace.SpanIDFromHex("051581bf3cb55c13")
 	tcs := []struct {
@@ -188,7 +192,9 @@ func TestHandler(t *testing.T) {
 		},
 	}
 	for _, tc := range tcs {
+		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			buf := new(bytes.Buffer)
 			lg := slog.New(New(slog.LevelDebug, buf))
 			for i, arg := range tc.args {
@@ -228,47 +234,52 @@ func TestHandler(t *testing.T) {
 }
 
 func BenchmarkHandler(b *testing.B) {
-	lg := slog.New(New(slog.LevelDebug, io.Discard))
 	ctx := context.Background()
-	b.Run("ints", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
-			lg.LogAttrs(ctx, slog.LevelInfo, "benchmark msg", slog.Int("a", 1), slog.Int("b", 2), slog.Int("c", 3), slog.Int("d", 4), slog.Int("e", 5))
-		}
-	})
-	b.Run("floats", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
-			lg.LogAttrs(ctx, slog.LevelInfo, "benchmark msg", slog.Float64("a", 1), slog.Float64("b", 2), slog.Float64("c", 3), slog.Float64("d", 4), slog.Float64("e", 5))
-		}
-	})
-	b.Run("bools", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
-			lg.LogAttrs(ctx, slog.LevelInfo, "benchmark msg", slog.Bool("a", true), slog.Bool("b", true), slog.Bool("c", false), slog.Bool("d", true), slog.Bool("e", true))
-		}
-	})
-	b.Run("strings", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
-			lg.LogAttrs(ctx, slog.LevelInfo, "benchmark msg", slog.String("a", "zzzzzz"), slog.String("b", "yyy yyy"), slog.String("c", "x x x x x x"), slog.String("d", "w w ww w w"), slog.String("e", "vvv v vvv"))
-		}
-	})
-	b.Run("objects", func(b *testing.B) {
-		err := errors.New("zzz")      // error
-		ip := netip.IPv6Unspecified() // encoding.TextMarshaler
-		bi := big.NewInt(1234567890)  // json.Marshaler
-		zz := struct {
-			A string
-			B int
-		}{
-			"aaa", 4567,
-		}
-		for i := 0; i < b.N; i++ {
-			lg.LogAttrs(ctx, slog.LevelInfo, "benchmark msg", slog.Any("a", err), slog.Any("b", ip), slog.Any("c", bi), slog.Any("d", fs.ModeDir), slog.Any("e", zz))
-		}
-	})
-	b.Run("mixed", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
-			lg.LogAttrs(ctx, slog.LevelInfo, "benchmark msg", slog.Int("a", 1), slog.Float64("b", 2), slog.Bool("c", true), slog.String("d", "benchy"), slog.Duration("e", 12345678*time.Millisecond))
-		}
-	})
+	handlers := map[string]*slog.Logger{
+		"slog":    slog.New(slog.NewJSONHandler(io.Discard, &slog.HandlerOptions{})),
+		"jsonlog": slog.New(New(slog.LevelDebug, io.Discard)),
+	}
+	for name, lg := range handlers {
+		b.Run(name+"/ints", func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				lg.LogAttrs(ctx, slog.LevelInfo, "benchmark msg", slog.Int("a", 1), slog.Int("b", 2), slog.Int("c", 3), slog.Int("d", 4), slog.Int("e", 5))
+			}
+		})
+		b.Run(name+"/floats", func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				lg.LogAttrs(ctx, slog.LevelInfo, "benchmark msg", slog.Float64("a", 1), slog.Float64("b", 2), slog.Float64("c", 3), slog.Float64("d", 4), slog.Float64("e", 5))
+			}
+		})
+		b.Run(name+"/bools", func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				lg.LogAttrs(ctx, slog.LevelInfo, "benchmark msg", slog.Bool("a", true), slog.Bool("b", true), slog.Bool("c", false), slog.Bool("d", true), slog.Bool("e", true))
+			}
+		})
+		b.Run(name+"/strings", func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				lg.LogAttrs(ctx, slog.LevelInfo, "benchmark msg", slog.String("a", "zzzzzz"), slog.String("b", "yyy yyy"), slog.String("c", "x x x x x x"), slog.String("d", "w w ww w w"), slog.String("e", "vvv v vvv"))
+			}
+		})
+		b.Run(name+"/objects", func(b *testing.B) {
+			err := errors.New("zzz")      // error
+			ip := netip.IPv6Unspecified() // encoding.TextMarshaler
+			bi := big.NewInt(1234567890)  // json.Marshaler
+			zz := struct {
+				A string
+				B int
+			}{
+				"aaa", 4567,
+			}
+			for i := 0; i < b.N; i++ {
+				lg.LogAttrs(ctx, slog.LevelInfo, "benchmark msg", slog.Any("a", err), slog.Any("b", ip), slog.Any("c", bi), slog.Any("d", fs.ModeDir), slog.Any("e", zz))
+			}
+		})
+		b.Run(name+"/mixed", func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				lg.LogAttrs(ctx, slog.LevelInfo, "benchmark msg", slog.Int("a", 1), slog.Float64("b", 2), slog.Bool("c", true), slog.String("d", "benchy"), slog.Duration("e", 12345678*time.Millisecond))
+			}
+		})
+	}
 }
 
 func FuzzHandler(f *testing.F) {

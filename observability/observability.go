@@ -12,12 +12,10 @@ import (
 	"strings"
 
 	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/propagation"
-	"go.opentelemetry.io/otel/sdk/instrumentation"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/trace"
@@ -130,21 +128,16 @@ func New(c *Config) *O {
 			sdkmetric.WithReader(
 				sdkmetric.NewPeriodicReader(me),
 			),
-			// https://github.com/open-telemetry/opentelemetry-go-contrib/issues/3071
-			sdkmetric.WithView(sdkmetric.NewView(sdkmetric.Instrument{
-				Scope: instrumentation.Scope{
-					Name: "go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp",
-				},
-			}, sdkmetric.Stream{
-				AttributeFilter: attribute.Filter(func(kv attribute.KeyValue) bool {
-					switch kv.Key {
-					case "net.sock.peer.addr", "net.sock.peer.port":
-						return false
-					default:
-						return true
-					}
+			sdkmetric.WithView(
+				sdkmetric.NewView(sdkmetric.Instrument{
+					Kind: sdkmetric.InstrumentKindHistogram,
+				}, sdkmetric.Stream{
+					Aggregation: sdkmetric.AggregationBase2ExponentialHistogram{
+						MaxSize:  160,
+						MaxScale: 20,
+					},
 				}),
-			})),
+			),
 		)
 		otel.SetMeterProvider(mp)
 	}
